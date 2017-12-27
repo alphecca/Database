@@ -1,0 +1,919 @@
+/*
+* DB Project 1-3 : Implementing DML
+* Database, 2017 Fall Semester
+* 2015-10033 Kim Da Yun
+*/
+
+options
+{
+  static = false;
+  DEBUG_PARSER = false;
+  IGNORE_CASE = true;
+}
+
+PARSER_BEGIN(DBMSParser)
+
+//package
+import dbms.*;
+
+//import
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+
+
+public class DBMSParser
+{
+  
+  public static void main(String args[]) //throws ParseException
+  {
+	DBMSParser parser = new DBMSParser(System.in);
+	
+    while (true) {  
+      try
+      {
+    	System.out.print("DB_2015-10033> ");    
+        parser.command();
+      }
+      catch (ParseException e) {//Syntax Error
+        //System.out.println(e);
+        System.out.println("Syntax Error");
+        parser = new DBMSParser(System.in);
+        //DBMSParser.ReInit(System.in);                
+      }catch (Exception e) {
+        parser = new DBMSParser(System.in);
+      }
+    }
+  }  
+}
+
+
+PARSER_END(DBMSParser)
+
+SKIP : { " " | "\r" | "\t" | "\n" }
+
+TOKEN : /* Keywords */
+{
+  < EXIT: "exit" >
+| < CREATE: "create" >
+| < TABLE: "table" >
+| < NOT: "not" >
+| < NULL: "null" >
+| < PRIMARY: "primary" >
+| < KEY: "key" >
+| < FOREIGN: "foreign" >
+| < REFERENCES: "references" >
+| < INT: "int" >
+| < CHAR: "char" >
+| < DATE: "date" >
+| < DROP: "drop" >
+| < SHOW: "show" >
+| < TABLES: "tables" >
+| < DESC: "desc" >
+| < SELECT: "select" >
+| < AS: "as" >
+| < FROM: "from" >
+| < WHERE: "where" >
+| < OR: "or" >
+| < AND: "and" >
+| < IS: "is" >
+| < INSERT: "insert" >
+| < INTO: "into" >
+| < VALUES: "values" >
+| < DELETE: "delete" >
+| < ALTER: "alter" >
+| < ADD : "add" >
+| < COUNT: "count" >
+| < SUM : "sum" >
+| < AVG : "avg" >
+}
+
+TOKEN :
+{
+  < SEMICOLON : ";" >
+| < LEFT_PAREN : "(" >
+| < RIGHT_PAREN : ")" >
+| < PERIOD : "." >
+| < COMMA : "," >
+| < UNDERSCORE : "_" >
+| < QUOTE: "\'" >
+| < LEFT_PEAK : "<" >
+| < RIGHT_PEAK : ">" >
+| < INT_VALUE : (< SIGN >)? (< DIGIT >)+>
+| < SIGN : "+" | "-" >
+| < DIGIT : [ "0"-"9" ] >
+| < LEGAL_IDENTIFIER : < ALPHABET > (< ALPHABET > | < UNDERSCORE >)* >
+| < ALPHABET : [ "a"-"z", "A"-"Z" ] >
+| < CHAR_STRING : < QUOTE > (< NON_QUOTE_CHARACTER >)* < QUOTE > >
+| < NNNN : < DIGIT > < DIGIT > < DIGIT > < DIGIT > >
+| < NN : < DIGIT > < DIGIT > > 
+| < DATE_VALUE : < NNNN > "-" < NN > "-" < NN > >
+| < STAR : "*" >
+| < EQUAL : "=" >
+| < NON_QUOTE_CHARACTER : < DIGIT > | < ALPHABET > | < NON_QUOTE_SPECIAL_CHARACTERS > | " " >
+| < NON_QUOTE_SPECIAL_CHARACTERS : "~"|"`"|"!"|"@"|"#"|"$"|"%"|"^"|"&"|< STAR >|< LEFT_PAREN>|< RIGHT_PAREN >|"-"|< UNDERSCORE >|< EQUAL >|"+"|"["|"{"|"]"|"}"|"\\"|"|"|< SEMICOLON >|":"|< COMMA >|< LEFT_PEAK >|< PERIOD >|< RIGHT_PEAK >|"/"|"?">
+// NON QUOTE SPECIAL CHARACTERS     ~   `   !   @   #   $   %   ^   &    *        (                )           -     _                 =    +   [   {   ]   }   \    |   ;             :    ,        <     .         >   /   ?  
+}
+
+void command() :
+{ }
+{
+  (  
+	  queryList() 
+	  | ( < EXIT > < SEMICOLON > ) {
+	  	System.exit(0);
+	  }
+ )
+}
+
+void queryList() :
+{ QueryTemplate q; }
+{
+  (
+    q = query()
+    < SEMICOLON >
+    {
+       try {
+      		q.executeQuery();
+      		System.out.print("DB_2015-10033> ");
+    	}catch(dbException e) {
+    	 }
+    }
+  )+
+}
+
+QueryTemplate query() :
+{
+  QueryTemplate result = new QueryTemplate();
+  int q =0 ;
+}
+{
+  (
+      ( result = createTableQuery()  )
+	| ( result = dropTableQuery() )
+	| ( result = descQuery() )
+	| ( result = showTablesQuery() )
+	| ( result = selectQuery()  )
+	| ( result = insertQuery() )
+	| ( result = deleteQuery() )
+	| ( alterTableQuery() {result.setQueryTemplate(4);} )
+  )
+  { return result; }
+}
+
+QueryTemplate createTableQuery() : 
+{
+  QueryTemplate result = new QueryTemplate();
+  String tbn;
+  createTableQuery q = new createTableQuery();
+}
+{
+  < CREATE > <TABLE >
+  tbn = tableName() { q.setTableName(tbn); } 
+  tableElementList(q)
+  {
+   result.setQueryTemplate(5);
+   result.setQueryTemplate(q);
+   return result; 
+  }
+}
+
+void tableElementList(createTableQuery q) :
+{
+  //return result = new CreateTableQuery();
+  }
+{
+  < LEFT_PAREN >
+  tableElement(q)  
+  (
+    < COMMA >
+
+    tableElement(q)
+  )*
+  < RIGHT_PAREN >
+}
+
+void tableElement(createTableQuery q) :
+{
+  colAttribute colAtt;
+  }
+{
+  colAtt = columnDefinition()
+  {
+    try { 
+	    q.addColumnList(colAtt);
+	  }catch(Exception e) {
+	    
+	  }
+	}
+	| tableConstraintDefinition(q)
+}
+
+colAttribute columnDefinition() :
+{
+  String colName, dataType;
+  boolean nullable = true;
+}
+{
+  (
+  colName = columnName()
+  dataType = dataType()
+  [
+    < NOT > <NULL >
+    { nullable = false;} //TODO can this be [ <NULL >]   ??? 
+  ]
+  )
+  {
+    return new colAttribute(colName, dataType, nullable); 
+  }
+}
+
+void tableConstraintDefinition(createTableQuery q) :
+{
+  ArrayList<String > pkC = new ArrayList<String >();
+  refConstraint fkC;
+  }
+{
+  //
+  pkC = primaryKeyConstraint()
+  {
+    try {
+    	q.addPkConstraint(pkC);
+  	}catch(Exception e) {
+  	 ;
+  	}   
+   }
+| fkC = referentialConstraint()
+  {
+    try {  
+    	q.addRefConstraint(fkC);
+  	}catch(Exception e) {
+    ;
+  }
+    }
+}
+
+ArrayList<String > primaryKeyConstraint() :
+{ArrayList<String > pkList = new ArrayList<String >(); }
+{
+  < PRIMARY > <KEY >
+  pkList = columnNameList()
+  {
+    return pkList;
+  }
+}
+
+refConstraint referentialConstraint() :
+{
+  ArrayList<String > colList = new ArrayList<String >();
+  String refTbn;
+  ArrayList<String > refList = new ArrayList<String >();
+  }
+{
+  < FOREIGN > <KEY >
+  colList = columnNameList()
+  < REFERENCES >
+  refTbn = tableName()
+  refList = columnNameList()
+  {
+    return new refConstraint(colList, refTbn, refList); 
+  }
+}
+
+ArrayList<String > columnNameList() :
+{
+  ArrayList<String > result = new ArrayList<String >();
+  String tmp;
+  }
+{
+  < LEFT_PAREN >
+  tmp = columnName() { result.add(tmp); }
+  (
+    < COMMA >
+    tmp = columnName() { result.add(tmp); }
+  )*
+  < RIGHT_PAREN >
+  {
+    return result;
+  }
+}
+
+String dataType() :
+{
+  String dataType = new String();
+  Token size;
+  }
+{
+  (    
+  < INT >
+  { dataType = "int"; }
+| (
+    < CHAR > 
+    < LEFT_PAREN >
+    size = < INT_VALUE >
+    < RIGHT_PAREN >
+  )
+  {
+    int l=0;
+    try {
+      l = Integer.parseInt(size.image);
+      }catch(NumberFormatException e) {
+    	  //int size bigger than 32bit
+    }
+	dataType = "char("+String.valueOf(l)+")";
+  }
+| < DATE >
+  { dataType = "date"; }
+) {
+  return dataType;
+}
+}
+
+String tableName() :
+{Token t;}
+{
+  t = < LEGAL_IDENTIFIER >
+  {
+    return t.image.toLowerCase();
+  }
+}
+
+String columnName() :
+{
+  Token tkn;
+  }
+{
+  tkn = < LEGAL_IDENTIFIER >
+  {
+    return tkn.image.toLowerCase();
+	// TODO (ignore case?)String result = tkn.image.toLowerCase();
+	// TODO check example: create table TaBLe(coli int, colj int);
+	
+  }
+}
+
+QueryTemplate dropTableQuery()://drop tables query 
+{
+  QueryTemplate result = new QueryTemplate();
+  String tbn;//table name to remove
+  }
+{
+  < DROP > <TABLE >
+  tbn =tableName()
+  {
+	result.setQueryTemplate(6);
+	result.setQueryTemplate(tbn);
+	return result; 
+  }
+}
+
+QueryTemplate descQuery()://desc Query
+{
+  QueryTemplate result = new QueryTemplate();
+  String tbn;//table name to describe
+  }
+{
+  < DESC >
+  tbn = tableName()
+  {
+    result.setQueryTemplate(7);
+	result.setQueryTemplate(tbn);
+	return result;
+  }
+}
+
+QueryTemplate showTablesQuery()://show tables
+{
+  QueryTemplate result = new QueryTemplate();
+  }
+{
+  <SHOW > <TABLES >
+  {
+    result.setQueryTemplate(8);
+	return result; 
+  }
+}
+
+QueryTemplate selectQuery()://select Query
+{
+  QueryTemplate q = new QueryTemplate();
+  ArrayList<refTabCol > sl = new ArrayList<refTabCol >();
+  selectQuery sq = new selectQuery();
+  q.setQueryTemplate(1);
+  }
+{
+  <SELECT>
+  sl = selectList()
+  sq = tableExpression()
+  {
+    sq.setSelectList(sl);
+    q.selectQuery(sq);
+    return q;
+  }
+}
+
+ArrayList<refTabCol > selectList():
+{
+  Token tk;
+  ArrayList<refTabCol > result = new ArrayList<refTabCol >();
+  refTabCol tmp = new refTabCol();
+  }
+{
+  (    tk = < STAR > { tmp.setIsRef(true); tmp.setC(tk.image); tmp.setT(tk.image); result.add(tmp);}
+	| (
+	    tmp = selectedColumn() { result.add(tmp); }
+	  	(	< COMMA >
+	  	 	tmp = selectedColumn() { result.add(tmp); }
+	 	 )*
+  	  )
+ 	)
+  	{return result;}
+}
+
+selectQuery tableExpression():
+{
+  selectQuery result = new selectQuery();
+  ArrayList<refTabCol > al = new ArrayList<refTabCol >();
+  ExpTree tree = new ExpTree();
+  }
+{
+  (    
+  al = fromClause() { result.setFromList(al); }
+  [ tree = whereClause() { result.setWhereClause(tree); } ]
+	)
+  {return result; }
+}
+
+refTabCol selectedColumn():
+{
+  Token tk = new Token();
+  refTabCol result = new refTabCol();
+  String tmp = new String();
+  String alias = new String();
+  String col = new String();
+  String tbn = new String();
+  }
+{
+  (    
+  (  ( tk = < LEGAL_IDENTIFIER > [ <PERIOD > col = columnName() ] )  | count()  | sum()  | avg()  )
+  //you can use aggregate function count, sum, avg in < selectedColumn >
+  [ < AS > alias = columnName() ]
+	)
+  {
+    result.setA(alias);
+    tmp = tk.image;
+    if(col == null || col.isEmpty()) col = tmp;
+    else tbn = tmp;
+    result.setT(tbn);
+    result.setC(col);
+	return result;
+  }
+  
+}
+
+void count():
+{}
+{
+  < COUNT ><LEFT_PAREN > < LEGAL_IDENTIFIER > [ <PERIOD > columnName() ] <RIGHT_PAREN >
+  //count  (  tablename.columnname ) OR count ( columnName )
+}
+void sum():
+{}
+{
+  < SUM ><LEFT_PAREN > < LEGAL_IDENTIFIER > [ <PERIOD > columnName() ] <RIGHT_PAREN >
+}
+void avg():
+{}
+{
+  < AVG ><LEFT_PAREN > < LEGAL_IDENTIFIER > [ <PERIOD > columnName() ] <RIGHT_PAREN >
+}
+
+ArrayList<refTabCol > fromClause():
+{
+  ArrayList<refTabCol > result = new ArrayList<refTabCol >();
+   }
+{
+  < FROM >
+  result = tableReferenceList()
+  {
+    return result;
+    }
+}
+
+ExpTree whereClause():
+{
+  ExpTree result = new ExpTree();
+  }
+{
+  < WHERE >
+  result = booleanValueExpression()
+  { return result; }
+}
+
+ArrayList<refTabCol > tableReferenceList():
+{
+  ArrayList<refTabCol > result = new ArrayList<refTabCol >();
+  refTabCol tmp = new refTabCol();
+  }
+{
+  tmp = referedTable()
+   { result.add(tmp);   }
+  (
+    < COMMA >
+    tmp = referedTable()
+    {
+      result.add(tmp); 
+    }
+  )*
+  {
+    return result;
+  }
+}
+
+refTabCol referedTable():
+{
+  refTabCol result = new refTabCol();
+  String tbn = new String();
+  String alias = new String();
+  }
+{
+  tbn = tableName() [ < AS > alias = tableName() ]
+  {
+    result.setTA(tbn, alias);
+    return result;
+  }
+}
+
+ExpTree booleanValueExpression():
+{
+  ExpTree result = new ExpTree();
+  ArrayList<ExpTree > child = new ArrayList<ExpTree >();
+  ExpTree tmp = new ExpTree();
+  result.setOperator("or");
+  }
+{
+  tmp = booleanTerm() { child.add(tmp); }
+  ( < OR >
+   tmp =booleanTerm() { child.add(tmp); }
+  )*
+  {
+    result.setChild(child);
+    return result;
+  }
+}
+
+ExpTree booleanTerm():
+{
+  ExpTree result = new ExpTree();
+  ArrayList<ExpTree > child = new ArrayList<ExpTree >();
+  ExpTree tmp = new ExpTree();
+  result.setOperator("and");
+  }
+{
+  tmp =booleanFactor() { child.add(tmp); }
+  ( < AND >
+  	tmp = booleanFactor() { child.add(tmp); }
+   )*
+   {
+    result.setChild(child);
+    return result;
+  }
+}
+
+ExpTree booleanFactor():
+{
+  Token tk = new Token();
+  ExpTree tmp = new ExpTree();
+  }
+{
+  [ tk = < NOT > ] tmp = booleanTest()
+  {
+    String foo = tk.image;
+    if(foo != null){// negation needed
+    	ExpTree result = new ExpTree();
+    	ArrayList<ExpTree > child = new ArrayList<ExpTree >();
+    	
+		child.add(tmp);
+		result.setChild(child);
+		result.setOperator("not");
+		return result;
+	}else {
+		return tmp;  
+	}
+    
+    
+  }
+}
+
+ExpTree booleanTest():
+{
+  ExpTree result = new ExpTree();
+  ExpTree tmp = new ExpTree();
+  predicate op = new predicate();
+  }
+{
+  (    
+	  op = predicate() { if(op!=null) result.setNode(op); }
+	  | tmp = parenthesizedBooleanExpression()
+	  	{
+	  	  if(tmp!= null)
+		  result = tmp;
+		}
+	)
+	{
+	  return result;
+  	  }
+}
+
+predicate predicate():
+{
+  predicate result = new predicate();
+  Token tk;
+  String tmp= new String();
+  String operator  = new String();
+  refTabCol Op1 = new refTabCol();
+  refTabCol Op2 = new refTabCol();
+  String tbn = new String();
+  String col = new String();
+  }
+{
+  (
+	  (
+	    (	      
+	    tk = < LEGAL_IDENTIFIER > { tmp = tk.image; }
+	    [ <PERIOD > col = columnName() ]
+	    {
+	      if(col.isEmpty()) {
+	         col = tmp;
+	         
+	         Op1.setTC(tbn, col);
+	       }
+	      else {
+	         tbn = tmp;
+	         Op1.setTC(tbn, col);
+	         
+	       }
+	      
+	      Op1.setIsRef(true);
+	    } 
+	  )
+	  (
+	    operator = nullOperation()
+	    | ( operator = compOp()
+	    	Op2 = compOperand()
+	    	)
+	  )
+	)
+  { result.setOperator(operator);
+    result.setOperand(Op1, Op2);
+    
+    return result;
+     }
+  )
+  |
+  (
+    tmp = comparableValue()
+    operator = compOp()
+    Op2 = compOperand()
+    {
+      Op1.setC(tmp);
+      Op1.setIsRef(false);
+      result.setOperand(Op1, Op2);
+      result.setOperator(operator);
+	 
+      return result;
+       }
+  ) 
+}
+
+ExpTree parenthesizedBooleanExpression():
+{
+  ExpTree result = new ExpTree();
+  }
+{
+  < LEFT_PAREN > result = booleanValueExpression() < RIGHT_PAREN >
+  {
+    return result;
+  }
+}
+
+predicate comparisonPredicate():
+{
+  refTabCol op1, op2;
+  String operator;
+  }
+{
+  op1 = compOperand()
+  operator = compOp()
+  op2 = compOperand()
+  {
+    return new predicate(op1, operator, op2);
+  }
+}
+
+refTabCol compOperand():
+{
+  refTabCol result = new refTabCol();
+  Token tk;
+  String tmp = new String();
+  String col = new String();
+  String tbn = new String();
+  }
+{
+  col = comparableValue()
+  	{
+  	  result.setC(col);
+  	  result.setIsRef(false);
+  	  
+  	  return result; 
+  	}
+  | (
+    tk = < LEGAL_IDENTIFIER > { tmp = tk.image; }
+   	[ <PERIOD > col = columnName() ]
+ 	)
+   	{
+  	  if(col.isEmpty()) col = tmp;
+  	  else tbn = tmp;
+  	  result.setC(col);
+  	  result.setT(tbn);
+  	  result.setIsRef(true);
+  	  
+	  return result; }
+}
+
+String compOp():
+{
+  Token tk;
+ 
+  }
+{
+  (    tk =< LEFT_PEAK > | tk =< RIGHT_PEAK > | tk = < EQUAL >)
+    {
+    	return tk.image;
+  	}
+	|(
+    	tk = ">=" | tk = "<=" | tk = "!="
+    )
+    { return tk.image; }
+   
+}
+
+String comparableValue():
+{
+  String result = new String();
+  Token tmp;
+  }
+{
+ (   tmp = < INT_VALUE >
+ | tmp = < CHAR_STRING >
+ | tmp = < DATE_VALUE >
+	)
+ {
+   result = tmp.image;
+   return result;
+   } 
+}
+
+predicate nullPredicate():
+{
+  predicate result = new predicate();
+  refTabCol op1 = new refTabCol();
+  String tmp = new String();
+  Token tk = new Token();
+  String operator;
+  }
+{
+  (  	tk = < LEGAL_IDENTIFIER >
+  	[ <PERIOD > tmp = columnName() ]
+	)
+  {    
+    if(tmp == null | tmp.isEmpty())
+    	op1.setC(tk.image);
+    else
+    	op1.setCA(tk.image, tmp);
+    op1.setIsRef(true);
+  }
+  operator = nullOperation()
+  {
+    result.setOperand(op1, null);
+    result.setOperator(operator);
+    return result;
+  }
+}
+
+String nullOperation():
+{
+  Token tk;
+  String result="is";
+  }
+{
+  < IS >
+  [ tk = <NOT > { result+=" not";} ]
+  <NULL >
+  {
+    result += " null";
+    return result;
+  }
+  
+}
+
+QueryTemplate insertQuery()://Insert Query 
+{
+  String tbn;
+  	QueryTemplate q = new QueryTemplate();
+	insertQuery iq = new insertQuery();
+	insertQuery values = new insertQuery();
+  }
+{
+  <INSERT> <INTO >
+  tbn = tableName()
+  values = insertColumnsAndSources()
+  {
+    iq = values;
+    iq.setTbn(tbn);
+    q.setInsertQuery(iq);
+    q.setQueryTemplate(2);
+    return q;
+  }
+}
+
+insertQuery insertColumnsAndSources():
+{
+  insertQuery result = new insertQuery();
+  ArrayList<String > colFam = new ArrayList<String >();
+  tupleElement valL = new tupleElement();
+  
+  }
+{
+  (    
+  [ colFam = columnNameList() ]
+   valL = valueList()
+ )
+   {
+     result.setColumnFamily(colFam);
+     result.setTupleElement(valL);
+     return result;
+      }
+}
+
+tupleElement valueList():
+{
+  String tmp = new String();
+  ArrayList<String > valL = new ArrayList<String >();
+  }
+{
+  < VALUES > <LEFT_PAREN >
+  tmp = value() { valL.add(tmp); }
+  (
+    < COMMA >
+    tmp = value() { valL.add(tmp); }
+	)*
+  < RIGHT_PAREN >
+  {
+    return new tupleElement(valL);
+  }
+}
+
+String value():
+{
+  String result = new String("null");
+  }
+{
+  (    < NULL > | result = comparableValue()
+  )
+  {
+    return result;
+  }
+}
+
+QueryTemplate deleteQuery()://delete Query
+{
+  QueryTemplate q = new QueryTemplate();
+  deleteQuery dq = new deleteQuery();
+  String tbn = new String();
+  ExpTree tree = new ExpTree();
+  }
+{
+  (    
+  <DELETE> < FROM >
+  tbn = tableName()
+  [ tree = whereClause() ]
+  )
+  {
+    
+    dq.setDeleteQuery(tbn, tree);
+    q.setDeleteQuery(dq);
+    q.setQueryTemplate(3);
+    return q; 
+  }
+  
+}
+/*****Optional*****/
+void alterTableQuery():
+{} {
+  < ALTER > <TABLE > tableName() < ADD > columnName() dataType()
+  //in tableName(), add a new column columnName() of which type is dataType()  
+}
